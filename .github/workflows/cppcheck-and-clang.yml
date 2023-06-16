@@ -1,0 +1,201 @@
+name: Analyze 
+
+on:
+  pull_request:   # Kick off this on every PR
+  workflow_call:  # We may want to run this workflow from other places, like nightly builds
+    inputs:
+      nightly:
+        required: false 
+        type: boolean 
+        default: false
+    secrets:
+      GIST_SECRET:
+        required: true
+
+jobs:
+  run-cppcheck:
+    runs-on: ubuntu-latest
+    if: ${{ inputs.nightly == false }}
+    steps:
+
+    - name: Get PR File List 
+      shell: bash
+      run: |
+        URL="https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files"
+        curl -s -X GET -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" $URL | jq -r '.[] | .filename' > git_diff.log
+        cat git_diff.log 
+  
+    - name: Check for C/CPP Sources
+      shell: bash
+      run : |
+        CPP_FILE_LIST="/tmp/cppcheck_file_list.log"
+        
+        # Only keep the source files to check or CPPCheck gets confused.
+        sed '/\(\.c$\|\.cpp$\|\.c$\|\.cc$\|\.cu$\|\.cxx$\|\.h$\|\.hh$\|\.hpp$\|\.hxx$\|\.tcc$\)/!d' git_diff.log > $CPP_FILE_LIST
+
+        if [ -s $CPP_FILE_LIST ]; then
+          echo "C/C++ source files kept:"
+          cat $CPP_FILE_LIST
+        fi
+        
+        if [ -s $CPP_FILE_LIST ]; then
+          echo "contains_c_source=true" >> $GITHUB_ENV
+        else
+          echo "contains_c_source=false" >> $GITHUB_ENV
+        fi
+
+    - uses: actions/checkout@v2
+      name: Checkout Repo
+      if: env.contains_c_source == 'true'
+        
+    - uses: actions/setup-python@v2
+      name: Setup Python
+      if: env.contains_c_source == 'true'
+
+    - name: Install CPPCheck
+      if: env.contains_c_source == 'true'
+      run: sudo apt-get install -y cppcheck
+
+    - name: Run CPPCheck on Modified Source Files
+      if: env.contains_c_source == 'true'
+      continue-on-error: true
+      shell: bash
+      run: |
+        # These files specify the config for cppcheck and a list of errors to suppress
+        CPPCHECK_CONFIG=scripts/linters/cppcheck/cppcheck.cfg
+        CPPCHECK_SUPPRESSED=scripts/linters/cppcheck/cppcheck-suppressions.txt
+
+        echo "Files to check:"
+        cat /tmp/cppcheck_file_list.log
+
+        options=( "-j2"
+          "--force"
+          "--inconclusive"
+          "--enable=performance,style,portability,information"
+          "--library=scripts/linters/cppcheck/cppcheck.cfg"
+          "--suppressions-list=scripts/linters/cppcheck/cppcheck-suppressions.txt"
+          "--file-list=/tmp/cppcheck_file_list.log"
+          "--template={file}:{line}:{column}:{message}"
+          "--output-file=/tmp/cppcheck.log"
+          "--report-progress")
+
+        cppcheck "${options[@]}"
+        
+        if [ -s /tmp/cppcheck.log ]; then
+          echo "Errors Found:"
+          cat /tmp/cppcheck.log
+        fi
+
+
+    - uses: actions/upload-artifact@master
+      name: Upload CPPCheck error log
+      if: env.contains_c_source == 'true'
+      with:
+        name: cppcheck-output
+        path: /tmp/cppcheck.log
+
+    - name: Check for cppcheck output
+      if: env.contains_c_source == 'true'
+      run : |
+        if [ -s /tmp/cppcheck.log ]; then
+          exit 1
+        fi
+
+  run-clang-format:
+    runs-on: ubuntu-latest
+    if: ${{ inputs.nightly == false }}
+    steps:
+      
+    - uses: actions/checkout@v2
+      name: Checkout Repo
+
+    - name: Get PR File List 
+      shell: bash
+      run: |
+        URL="https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files"
+        curl -s -X GET -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" $URL | jq -r '.[] | .filename' > /tmp/change_set.log
+        cat /tmp/change_set.log 
+
+    - name: Check for C/CPP Sources
+      shell: bash
+      run : |
+        CLANG_FORMAT_FILE_LIST="/tmp/clang_format_file_list.log"
+        
+        # Only keep the source files to check or clang-format starts checking everything.
+        sed '/\(\.c$\|\.cpp$\|\.c$\|\.cc$\|\.cu$\|\.cxx$\|\.h$\|\.hh$\|\.hpp$\|\.hxx$\|\.tcc$\)/!d' /tmp/change_set.log > $CLANG_FORMAT_FILE_LIST
+
+        if [ -s $CLANG_FORMAT_FILE_LIST ]; then
+          echo "C/C++ source files kept for clang-format:"
+          cat $CLANG_FORMAT_FILE_LIST
+        fi
+        
+        if [ -s $CLANG_FORMAT_FILE_LIST ]; then
+          echo "contains_c_source=true" >> $GITHUB_ENV
+          echo "contains_clang_errors=false" >> $GITHUB_ENV
+        else
+          echo "contains_c_source=false" >> $GITHUB_ENV
+        fi
+
+    - name: Install Clang-Format 
+      if: env.contains_c_source == 'true'
+      run: sudo apt-get install -y clang-format 
+
+    - name: Run clang-format on changed fileset.
+      if: env.contains_c_source == 'true'
+      continue-on-error: true
+      shell: bash
+      run: |
+        echo "Files to check:"
+        cat /tmp/clang_format_file_list.log 
+        
+        FILE_PATHS=$(cat /tmp/clang_format_file_list.log)
+        for FILE_PATH in $FILE_PATHS
+        do
+          
+          options=( 
+            "--style=file"
+            "--dry-run"
+            "--Werror")
+         
+          # Clang format outputs to stderr... why do you do this clang-format 
+          if ! clang-format "${options[@]}" $FILE_PATH &> /dev/null ; then
+            echo -e "\u001b[31;1m$FILE_PATH has clang-format errors!\u001b[0m"
+            echo $FILE_PATH >> /tmp/clang-format.log
+            echo "contains_clang_errors=true" >> $GITHUB_ENV
+          fi
+
+        done
+ 
+    - name: Check for clang-format output
+      if: env.contains_c_source == 'true' && env.contains_clang_errors == 'true'
+      run : |
+        if [ -s /tmp/clang-format.log ]; then
+          exit 1
+        fi
+
+  Aggregate-Lint-Output:
+    needs: [run-cppcheck, run-clang-format]
+    if: ${{ always()  && inputs.nightly == false }}
+    runs-on: ubuntu-latest
+    steps:
+      
+    - uses: actions/checkout@v2
+      name: Checkout Repo
+     
+    - uses: reviewdog/action-setup@v1
+      with:
+        reviewdog_version: latest 
+
+    - name: Download all artifacts 
+      uses: actions/download-artifact@v2
+      with:
+        path: /tmp/artifacts
+
+    - name: Run reviewdog
+      env:
+        REVIEWDOG_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        CPP_FILE=/tmp/artifacts/cppcheck-output/cppcheck.log
+        if test -f "$CPP_FILE"; then
+          cat "$CPP_FILE" | reviewdog -efm="%f:%l:%c:%m" -filter-mode=nofilter -reporter=github-pr-check
+        fi
