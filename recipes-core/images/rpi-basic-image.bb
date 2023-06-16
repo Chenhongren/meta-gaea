@@ -4,6 +4,7 @@ include recipes-core/images/core-image-minimal.bb
 # Include modules in rootfs
 IMAGE_INSTALL += " \
     hello-world \
+    sdbusplus \
 "
 
 do_image:prepend() {
