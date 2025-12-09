@@ -1,31 +1,14 @@
-SUMMARY = "Hello World Demo"
-SECTION = "apps"
-LICENSE = "CLOSED"
+SUMMARY = "Hello World C++ Example using Meson build system"
+DESCRIPTION = "Simple C++ Hello World application built using Meson"
+SECTION = "examples"
 
-APP_NAME = "hello-world"
-localdir = "/usr/local"
-bindir = "${localdir}/bin"
+LICENSE = "MIT"
+LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 
-TARGET_CC_ARCH += "${LDFLAGS}"
+inherit meson pkgconfig
 
-SRC_URI = "file://main.c \
-           file://Makefile \
-	   "
+S = "${WORKDIR}/sources-unpack"
 
-S = "${WORKDIR}"
-
-do_compile() {
-    make -f Makefile
-
-}
-
-do_install () {
-    install -m 0755 -d ${D}${localdir}
-    install -m 0755 -d ${D}${bindir}
-    cd ${S}
-    install -m 0755 ${APP_NAME} ${D}${bindir}
-}
-
-FILES_${PN}-dev = ""
-FILES_${PN} = "${bindir}/*"
-
+SRC_URI = "file://main.cpp \
+           file://meson.build \
+          "
