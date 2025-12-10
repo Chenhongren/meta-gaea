@@ -10,8 +10,10 @@ IMAGE_INSTALL:append = " \
     wpa-supplicant \
     libgpiod \
     libgpiod-tools \
+    hello-world \
 "
 
 SYSTEMD_AUTO_ENABLE:wpa-supplicant = "enable"
 SYSTEMD_SERVICE:wpa-supplicant = "wpa_supplicant.service"
 WIFI_COUNTRY_CODE = "TW"
+
