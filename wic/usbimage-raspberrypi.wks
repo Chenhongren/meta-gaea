@@ -1,0 +1,8 @@
+# short-description: Create Raspberry Pi USB image
+
+# Boot partition
+part /boot --source bootimg-partition --ondisk sda --fstype=vfat --label boot --active --align 512 --size 200M
+
+# Root partition
+part / --source rootfs --ondisk sda --fstype=ext4 --label root --align 512 --size 400M
+
