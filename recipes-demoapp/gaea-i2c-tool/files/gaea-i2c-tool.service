@@ -1,0 +1,13 @@
+[Unit]
+Description=Gaea I2C Tool
+After=dbus.service
+Requires=dbus.service
+
+[Service]
+Restart=on-failure
+RestartSec=5
+ExecStart=/usr/bin/gaea-i2c-tool
+SyslogIdentifier=gaea-i2c-tool
+
+[Install]
+WantedBy=multi-user.target
