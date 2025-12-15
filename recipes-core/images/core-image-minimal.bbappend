@@ -10,6 +10,7 @@ IMAGE_INSTALL:append = " \
     wpa-supplicant \
     libgpiod \
     libgpiod-tools \
+    sdbusplus \
     hello-world \
 "
 
