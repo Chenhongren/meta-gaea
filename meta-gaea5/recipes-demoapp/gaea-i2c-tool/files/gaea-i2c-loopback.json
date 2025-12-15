@@ -1,0 +1,6 @@
+{
+    "i2c_bus": 0,
+    "chip_addr": 33,
+    "start_value": 0,
+    "end_value": 255
+}
