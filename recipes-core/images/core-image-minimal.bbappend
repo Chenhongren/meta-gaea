@@ -11,10 +11,10 @@ IMAGE_INSTALL:append = " \
     libgpiod \
     libgpiod-tools \
     sdbusplus \
+    i2c-tools \
     hello-world \
 "
 
 SYSTEMD_AUTO_ENABLE:wpa-supplicant = "enable"
 SYSTEMD_SERVICE:wpa-supplicant = "wpa_supplicant.service"
 WIFI_COUNTRY_CODE = "TW"
-
