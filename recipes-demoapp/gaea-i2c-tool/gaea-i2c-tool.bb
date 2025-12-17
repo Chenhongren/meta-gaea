@@ -17,7 +17,13 @@ SRC_URI = "file://main.cpp \
            file://dbus-gaea_i2c_tool.conf \
            file://gaea-i2c-tool.service \
            file://meson.build \
+           file://sc-gaea-i2c-tool.sh \
           "
 
 SYSTEMD_SERVICE:${PN} = "gaea-i2c-tool.service"
 SYSTEMD_AUTO_ENABLE:${PN} = "enable"
+
+do_install:append() {
+    install -d ${D}${libexecdir}/sanity_check/${PN}
+    install -m 0755 ${UNPACKDIR}/sc-gaea-i2c-tool.sh ${D}${libexecdir}/sanity_check/${PN}/
+}

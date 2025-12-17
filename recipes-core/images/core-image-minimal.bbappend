@@ -12,6 +12,7 @@ IMAGE_INSTALL:append = " \
     libgpiod-tools \
     sdbusplus \
     i2c-tools \
+    jq \
     hello-world \
 "
 
