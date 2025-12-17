@@ -277,6 +277,7 @@ int perform_loop_test(boost::asio::yield_context)
 				std::cerr << std::hex << static_cast<int>(i) << " ";
 			}
 			std::cerr << std::dec << std::endl;
+			close(fd);
 			return -EILSEQ;
 		}
 	}
@@ -311,29 +312,29 @@ static auto parseConfigFile(void)
 	return 0;
 }
 
-int updateJsonConfig(auto propertyName, auto value)
+template <typename T>
+int updateJsonConfig(const std::string& propertyName, const T& value)
 {
 	nlohmann::json cfg;
 
 	std::ifstream ifs(configFile);
-	if (ifs.is_open())
+	if (!ifs.is_open())
 	{
-		try
-		{
-			ifs >> cfg;
-		}
-		catch (...)
-		{
-			std::cerr << "failed to parse json, using empty object"
-					  << std::endl;
-			return -errno;
-		}
+		std::cerr << "failed to open config for reading" << std::endl;
+		return -EIO;
+	}
+
+	try
+	{
+		ifs >> cfg;
+	}
+	catch (const std::exception& e)
+	{
+		std::cerr << "failed to parse json" << e.what() << std::endl;
 		ifs.close();
+		return -EIO;
 	}
-	else
-	{
-		cfg = nlohmann::json::object();
-	}
+	ifs.close();
 
 	cfg[propertyName] = value;
 
@@ -341,7 +342,7 @@ int updateJsonConfig(auto propertyName, auto value)
 	if (!ofs.is_open())
 	{
 		std::cerr << "failed to open config for writing" << std::endl;
-		return -errno;
+		return -EIO;
 	}
 	ofs << cfg.dump(4) << std::endl;
 	ofs.close();
@@ -364,7 +365,7 @@ static void registerLoopbackInterface(sdbusplus::asio::object_server& server)
 				return false;
 			}
 			close(fd);
-			if (updateJsonConfig(i2cBusProperty, loopback_i2c_info.bus))
+			if (updateJsonConfig(i2cBusProperty, req))
 			{
 				return false;
 			}
@@ -384,7 +385,7 @@ static void registerLoopbackInterface(sdbusplus::asio::object_server& server)
 		[&](const uint8_t& req, uint8_t& propertyValue) {
 		if (req != propertyValue)
 		{
-			if (updateJsonConfig(chipAddrProperty, loopback_i2c_info.addr))
+			if (updateJsonConfig(chipAddrProperty, req))
 			{
 				return false;
 			}
@@ -412,7 +413,7 @@ static void registerLoopbackInterface(sdbusplus::asio::object_server& server)
 						  << std::endl;
 				return false;
 			}
-			if (updateJsonConfig(startValueProperty, loopback_i2c_info.start))
+			if (updateJsonConfig(startValueProperty, req))
 			{
 				return false;
 			}
@@ -439,7 +440,7 @@ static void registerLoopbackInterface(sdbusplus::asio::object_server& server)
 						  << std::endl;
 				return false;
 			}
-			if (updateJsonConfig(endValueProperty, loopback_i2c_info.end))
+			if (updateJsonConfig(endValueProperty, req))
 			{
 				return false;
 			}
