@@ -1,6 +1,6 @@
 # Machine name and firmware version for tag
 MACHINE_NAME = "Gaea5"
-FW_VERSION = "1.0-init"
+FW_VERSION = "2.0"
 CODENAME = "styhead"
 
 PRETTY_NAME = "${MACHINE_NAME} ${FW_VERSION} (Base: ${DISTRO_NAME} ${VERSION})"
