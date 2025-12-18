@@ -13,12 +13,17 @@ inherit meson pkgconfig systemd
 
 S = "${WORKDIR}/sources-unpack"
 
-SRC_URI = "file://main.cpp \
-           file://dbus-gaea_i2c_tool.conf \
-           file://gaea-i2c-tool.service \
-           file://meson.build \
-           file://sc-gaea-i2c-tool.sh \
-          "
+SRC_URI = " \
+    file://Main.cpp \
+    file://Loopback.cpp \
+    file://Loopback.hpp \
+    file://Util.cpp \
+    file://Util.hpp \
+    file://dbus-gaea_i2c_tool.conf \
+    file://gaea-i2c-tool.service \
+    file://meson.build \
+    file://sc-gaea-i2c-tool.sh \
+    "
 
 SYSTEMD_SERVICE:${PN} = "gaea-i2c-tool.service"
 SYSTEMD_AUTO_ENABLE:${PN} = "enable"

@@ -1,6 +1,18 @@
 {
-    "i2c_bus": 0,
-    "chip_addr": 33,
-    "start_value": 0,
-    "end_value": 255
+  "loopback_device": [
+    {
+      "name": "loopback_device/1",
+      "i2c_bus": 0,
+      "chip_addr": 33,
+      "start_value": 0,
+      "end_value": 255
+    },
+    {
+      "name": "loopback_device/2",
+      "i2c_bus": 1,
+      "chip_addr": 33,
+      "start_value": 0,
+      "end_value": 255
+    }
+  ]
 }
