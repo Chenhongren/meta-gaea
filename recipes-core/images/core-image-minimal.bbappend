@@ -13,6 +13,12 @@ IMAGE_INSTALL:append = " \
     sdbusplus \
     i2c-tools \
     jq \
+    kernel-modules \
+    linux-firmware-bcm43455 \
+    wireless-regdb-static \
+    wpa-supplicant \
+    iw \
+    openssh \
     hello-world \
 "
 
