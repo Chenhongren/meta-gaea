@@ -2,13 +2,17 @@
 
 set -u
 
-service="xyz.gaea.i2c_tool"
-obj_path="/xyz/gaea/i2c_tool"
-debug_intf="xyz.gaea.i2c_tool.debug"
-loopback_intf="xyz.gaea.i2c_tool.loopback_test"
-method_intf="xyz.gaea.i2c_tool.methods"
-
 json_config="/var/lib/gaea-i2c-tool/gaea-i2c-loopback.json"
+
+service="xyz.gaea.i2c_tool"
+
+i2cToolObjPath="/xyz/gaea/i2c_tool"
+methodIntf="xyz.gaea.i2c_tool.methods"
+debugIntf="xyz.gaea.i2c_tool.debug"
+debugModeProperty="debugMode"
+
+prefixLoopbackObjPath="/xyz/gaea/i2c_tool/"
+loopbackIntf="xyz.gaea.i2c_tool.loopback"
 
 logging() {
 	level="$1"
@@ -57,59 +61,70 @@ find_available_i2c_bus() {
 }
 
 verify_json_setting() {
-	_i2c_bus=$(jq -r '.i2c_bus' "$json_config")
-	_chip_addr=$(jq -r '.chip_addr' "$json_config")
-	_start_value=$(jq -r '.start_value' "$json_config")
-	_end_value=$(jq -r '.end_value' "$json_config")
 
-	logging INFO "<cmd> busctl get-property ${service} ${obj_path} ${loopback_intf} i2c_bus | awk '{print \$NF}'"
-	_dbus_i2c_bus=$(dbus_get_property "${loopback_intf}" "i2c_bus" | awk '{print $NF}')
-	[ "$_i2c_bus" != "$_dbus_i2c_bus" ] && return 1
+	while read -r dev; do
+		_name=$(echo "$dev" | jq -r '.name')
+		_i2c_bus=$(echo "$dev" | jq -r '.i2c_bus')
+		_chip_addr=$(echo "$dev" | jq -r '.chip_addr')
+		_start_value=$(echo "$dev" | jq -r '.start_value')
+		_end_value=$(echo "$dev" | jq -r '.end_value')
 
-	logging INFO "<cmd> busctl get-property ${service} ${obj_path} ${loopback_intf} chip_addr | awk '{print \$NF}'"
-	_dbus_chip_addr=$(dbus_get_property "${loopback_intf}" "chip_addr" | awk '{print $NF}')
-	[ "$_chip_addr" != "$_dbus_chip_addr" ] && return 1
+		_objPath="${prefixLoopbackObjPath}${_name}"
 
-	logging INFO "<cmd> busctl get-property ${service} ${obj_path} ${loopback_intf} start_value | awk '{print \$NF}'"
-	_dbus_start_value=$(dbus_get_property "${loopback_intf}" "start_value" | awk '{print $NF}')
-	[ "$_start_value" != "$_dbus_start_value" ] && return 1
+		logging INFO "<cmd> busctl get-property ${service} ${_objPath} ${loopbackIntf} i2cBus | awk '{print \$NF}'"
+		_dbus_i2c_bus=$(dbus_get_property "${_objPath}" "${loopbackIntf}" "i2cBus" | awk '{print $NF}')
+		[ "$_i2c_bus" != "$_dbus_i2c_bus" ] && return 1
 
-	logging INFO "<cmd> busctl get-property ${service} ${obj_path} ${loopback_intf} end_value | awk '{print \$NF}'"
-	_dbus_end_value=$(dbus_get_property "${loopback_intf}" "end_value" | awk '{print $NF}')
-	[ "$_end_value" != "$_dbus_end_value" ] && return 1
+		logging INFO "<cmd> busctl get-property ${service} ${_objPath} ${loopbackIntf} chipAddress | awk '{print \$NF}'"
+		_dbus_chip_addr=$(dbus_get_property "${_objPath}" "${loopbackIntf}" "chipAddress" | awk '{print $NF}')
+		[ "$_chip_addr" != "$_dbus_chip_addr" ] && return 1
+
+		logging INFO "<cmd> busctl get-property ${service} ${_objPath} ${loopbackIntf} startValue | awk '{print \$NF}'"
+		_dbus_start_value=$(dbus_get_property "${_objPath}" "${loopbackIntf}" "startValue" | awk '{print $NF}')
+		[ "$_start_value" != "$_dbus_start_value" ] && return 1
+
+		logging INFO "<cmd> busctl get-property ${service} ${_objPath} ${loopbackIntf} endValue | awk '{print \$NF}'"
+		_dbus_end_value=$(dbus_get_property "${_objPath}" "${loopbackIntf}" "endValue" | awk '{print $NF}')
+		[ "$_end_value" != "$_dbus_end_value" ] && return 1
+	done <<EOF
+$(jq -c '.loopback_device[]' "$json_config")
+EOF
 
 	return 0
 }
 
 dbus_set_property() {
-	local interface="$1"
-	local property="$2"
-	local value="$3"
-	label=$(busctl get-property "${service}" "${obj_path}" "${interface}" "${property}" | awk '{print $1}')
-	logging INFO "<cmd> busctl set-property ${service} ${obj_path} ${interface} "${property}" "${label}" ${value}"
-	busctl set-property "${service}" "${obj_path}" "${interface}" "${property}" "${label}" "${value}"
+	local _object="$1"
+	local _interface="$2"
+	local _property="$3"
+	local _value="$4"
+	_label=$(busctl get-property "${service}" "${_object}" "${_interface}" "${_property}" | awk '{print $1}')
+	logging INFO "<cmd> busctl set-property ${service} ${_object} ${_interface} ${_property} ${_label} ${_value}"
+	busctl set-property "${service}" "${_object}" "${_interface}" "${_property}" "${_label}" "${_value}"
 	if [ $? -ne 0 ]; then
 		return 1
 	fi
 }
 
 dbus_get_property() {
-	local interface="$1"
-	local property="$2"
-	busctl get-property "${service}" "${obj_path}" "${interface}" "${property}"
+	local object="$1"
+	local interface="$2"
+	local property="$3"
+	busctl get-property "${service}" "${object}" "${interface}" "${property}"
 }
 
 dbus_call_method() {
-	local interface="$1"
-	local method="$2"
-	shift 2;
-	local args="$@"
-	label=$(busctl introspect "${service}" "${obj_path}" "${interface}" | grep "${method}" | awk '{print $3}')
-	if [ "$label" = '-' ]; then
-		label=""
+	local _object="$1"
+	local _interface="$2"
+	local _method="$3"
+	shift 3;
+	local _args="$@"
+	_label=$(busctl introspect "${service}" "${_object}" "${_interface}" | grep "${_method}" | awk '{print $3}')
+	if [ "$_label" = '-' ]; then
+		_label=""
 	fi
-	logging INFO "<cmd> busctl call ${service} ${obj_path} ${interface} "${method}" "${label}" ${args}"
-	busctl call "${service}" "${obj_path}" "${interface}" "${method}" "${label}" ${args}
+	logging INFO "<cmd> busctl call ${service} ${_object} ${_interface} "${_method}" "${_label}" ${_args}"
+	busctl call "${service}" "${_object}" "${_interface}" "${_method}" "${_label}" ${_args}
 }
 
 restore_system() {
@@ -125,13 +140,13 @@ restore_system() {
 		logging INFO "gaea-i2c-tool is restarted"
 	fi
 
-	dbus_debug_mode=$(dbus_get_property "${debug_intf}" "debug_mode" | awk '{print $NF}')
+	dbus_debug_mode=$(dbus_get_property "${i2cToolObjPath}" "${debugIntf}" "${debugModeProperty}" | awk '{print $NF}')
 	if [ -z "$dbus_debug_mode" ]; then
-		logging ERROR "failed to get debug_mode property"
+		logging ERROR "failed to get "${debugModeProperty}" property"
 	fi
 
 	if [ "$dbus_debug_mode" = "true" ]; then
-		dbus_set_property "${debug_intf}" "debug_mode" "false"
+		dbus_set_property "${i2cToolObjPath}" "${debugIntf}" "${debugModeProperty}" "false"
 	else
 		logging INFO "debug mode is already disabled"
 	fi
@@ -154,8 +169,8 @@ if ! systemctl is-active --quiet gaea-i2c-tool; then
 	logging ERROR "gaea-i2c-tool service is inactive"
 fi
 
-logging INFO "<cmd> busctl introspect ${service} ${obj_path}"
-if ! busctl introspect ${service} ${obj_path}; then
+logging INFO "<cmd> busctl introspect ${service} ${i2cToolObjPath}"
+if ! busctl introspect ${service} ${i2cToolObjPath}; then
 	logging ERROR "failed to introspect gaea-i2c-tool d-bus"
 fi
 
@@ -165,90 +180,106 @@ if ! verify_json_setting; then
 	logging ERROR "Mismatch detected between JSON file and D-Bus properties"
 fi
 
-json_config="/var/lib/gaea-i2c-tool/gaea-i2c-loopback.json"
-i2c_bus=$(jq -r '.i2c_bus' "$json_config")
-chip_addr=$(jq -r '.chip_addr' "$json_config")
-start_value=$(jq -r '.start_value' "$json_config")
-end_value=$(jq -r '.end_value' "$json_config")
-
-logging INFO "<cmd> busctl get-property ${service} ${obj_path} ${debug_intf} debug_mode | awk '{print \$NF}'"
-dbus_debug_mode=$(dbus_get_property "${debug_intf}" "debug_mode" | awk '{print $NF}')
+logging INFO "<cmd> busctl get-property ${service} ${i2cToolObjPath} ${debugIntf} "${debugModeProperty}" | awk '{print \$NF}'"
+dbus_debug_mode=$(dbus_get_property "${i2cToolObjPath}" "${debugIntf}" "${debugModeProperty}" | awk '{print $NF}')
 if [ -z "$dbus_debug_mode" ]; then
-	logging ERROR "failed to get debug_mode property"
+	logging ERROR "failed to get "${debugModeProperty}" property"
 fi
 
 if [ "$dbus_debug_mode" = "false" ]; then
-	dbus_set_property "${debug_intf}" "debug_mode" "true"
+	dbus_set_property "${i2cToolObjPath}" "${debugIntf}" "${debugModeProperty}" "true"
 else
 	logging INFO "debug mode is already enabled"
 fi
 
-ret=$(dbus_call_method "${method_intf}" "read" $i2c_bus $chip_addr 8 | awk '{print $2}')
-if [ "$ret" != "0" ]; then
-	restore_system
-	show_journallog "${start}"
-	logging ERROR "fail to call read method, ret $ret"
-fi
+while read -r dev; do
+	name=$(echo "$dev" | jq -r '.name // empty')
+	i2cBus=$(echo "$dev" | jq -r '.i2c_bus // empty')
+	chipAddr=$(echo "$dev" | jq -r '.chip_addr // empty')
+	startValue=$(echo "$dev" | jq -r '.start_value // empty')
+	endValue=$(echo "$dev" | jq -r '.end_value // empty')
 
-ret=$(dbus_call_method "${method_intf}" "write" $i2c_bus $chip_addr 1 2 | awk '{print $2}')
-if [ "$ret" != "0" ]; then
-	restore_system
-	show_journallog "${start}"
-	logging ERROR "fail to call write method, ret $ret"
-fi
+	# null/empty check
+	if [ -z "$name" ] || [ -z "$i2cBus" ] || [ -z "$chipAddr" ] || \
+	   [ -z "$startValue" ] || [ -z "$endValue" ]; then
+		logging ERROR "json field is null or missing, $dev"
+		exit 1
+	fi
 
-ret=$(dbus_call_method "${method_intf}" "transfer" $i2c_bus $chip_addr 1 4 | awk '{print $2}')
-if [ "$ret" != "0" ]; then
-	restore_system
-	show_journallog "${start}"
-	logging ERROR "failed to call transfer method, ret $ret"
-fi
+	logging INFO "TESTING... name = $name bus=$i2cBus addr=$chipAddr range=[$startValue:$endValue]"
 
-ret=$(dbus_call_method "${loopback_intf}" "loopback_test" | awk '{print $2}')
-# TODO: will enable this as the target device is not ready
-#if [ "$ret" != "0" ]; then
-#	restore_system
-#	show_journallog "${start}"
-#	logging ERROR "failed to call loopback_test method, ret $ret"
-#fi
+	ret=$(dbus_call_method "${i2cToolObjPath}" "${methodIntf}" "read" $i2cBus $chipAddr 8 | awk '{print $2}')
+	if [ "$ret" != "0" ]; then
+		restore_system
+		show_journallog "${start}"
+		logging ERROR "fail to call read method, ret $ret"
+	fi
 
-if target_bus="$(find_available_i2c_bus "$i2c_bus")"; then
-	dbus_set_property "${loopback_intf}" "i2c_bus" "$target_bus"
+	ret=$(dbus_call_method "${i2cToolObjPath}" "${methodIntf}" "write" $i2cBus $chipAddr 1 2 | awk '{print $2}')
+	if [ "$ret" != "0" ]; then
+		restore_system
+		show_journallog "${start}"
+		logging ERROR "fail to call write method, ret $ret"
+	fi
+
+	ret=$(dbus_call_method "${i2cToolObjPath}" "${methodIntf}" "transfer" $i2cBus $chipAddr 1 4 | awk '{print $2}')
+	if [ "$ret" != "0" ]; then
+		restore_system
+		show_journallog "${start}"
+		logging ERROR "failed to call transfer method, ret $ret"
+	fi
+
+	ret=$(dbus_call_method "${prefixLoopbackObjPath}${name}" "${loopbackIntf}" "perform" | awk '{print $2}')
+	# TODO: will enable this as the target device is not ready
+	#if [ "$ret" != "0" ]; then
+	#	restore_system
+	#	show_journallog "${start}"
+	#	logging ERROR "failed to call loopback_test method, ret $ret"
+	#fi
+
+	if targetBus="$(find_available_i2c_bus "$i2cBus")"; then
+		dbus_set_property "${prefixLoopbackObjPath}${name}" "${loopbackIntf}" "i2cBus" "$targetBus"
+		if [ $? -ne 0 ]; then
+			restore_system
+			show_journallog "${start}"
+			logging ERROR "failed to set i2c_bus property"
+		fi
+	else
+		logging INFO "skipped i2c_bus testing as no available bus"
+	fi
+
+	dbus_set_property "${prefixLoopbackObjPath}${name}" "${loopbackIntf}" "chipAddress" "0xFF"
 	if [ $? -ne 0 ]; then
 		restore_system
 		show_journallog "${start}"
-		logging ERROR "failed to set i2c_bus property"
+		logging ERROR "failed to set chip_addr property"
 	fi
-else
-	logging INFO "skipped i2c_bus testing as no available bus"
-fi
 
-dbus_set_property "${loopback_intf}" "chip_addr" "0xFF"
-if [ $? -ne 0 ]; then
-	restore_system
-	show_journallog "${start}"
-	logging ERROR "failed to set chip_addr property"
-fi
+	dbus_set_property "${prefixLoopbackObjPath}${name}" "${loopbackIntf}" "startValue" "0x0F"
+	if [ $? -ne 0 ]; then
+		restore_system
+		show_journallog "${start}"
+		logging ERROR "failed to set start_value property"
+	fi
 
-dbus_set_property "${loopback_intf}" "start_value" "0x0F"
-if [ $? -ne 0 ]; then
-	restore_system
-	show_journallog "${start}"
-	logging ERROR "failed to set start_value property"
-fi
+	dbus_set_property "${prefixLoopbackObjPath}${name}" "${loopbackIntf}" "endValue" "0xF0"
+	if [ $? -ne 0 ]; then
+		restore_system
+		show_journallog "${start}"
+		logging ERROR "failed to set end_value property"
+	fi
 
-dbus_set_property "${loopback_intf}" "end_value" "0xF0"
-if [ $? -ne 0 ]; then
-	restore_system
-	show_journallog "${start}"
-	logging ERROR "failed to set end_value property"
-fi
+	if ! verify_json_setting; then
+		restore_system
+		show_journallog "${start}"
+		logging ERROR "Mismatch detected between JSON file and D-Bus properties"
+	fi
 
-if ! verify_json_setting; then
-	restore_system
-	show_journallog "${start}"
-	logging ERROR "Mismatch detected between JSON file and D-Bus properties"
-fi
+	logging INFO "TESTING...PASSED"
+
+done <<EOF
+$(jq -c '.loopback_device[]' "$json_config")
+EOF
 
 restore_system
 show_journallog "${start}"

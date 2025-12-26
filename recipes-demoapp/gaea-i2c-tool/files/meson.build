@@ -4,7 +4,9 @@ project('gaea-i2c-tool', 'cpp',
 
 executable(
     'gaea-i2c-tool',
-    'main.cpp',
+    'Main.cpp',
+    'Loopback.cpp',
+    'Util.cpp',
     dependencies: [
         dependency('sdbusplus'),
         dependency(
